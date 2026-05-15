@@ -23,12 +23,16 @@ def resolve_lang(lang: str) -> str:
     }
     return mapping.get(lang, "en-us")
 
-app = Flask(__name__)
-
 def check_token():
     token = request.args.get("token") or request.headers.get("X-API-Token")
     if not token or token != API_TOKEN:
         abort(401)
+
+app = Flask(__name__)
+
+@app.route("/")
+def health():
+    return "OK", 200
 
 @app.route("/star-chart")
 def star_chart():
