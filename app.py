@@ -10,6 +10,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from starplot import MapPlot, ZenithPlot, Mercator, Observer, settings, _
 
+API_VERSION = "1"
+
+
 matplotlib.use("Agg")
 
 API_TOKEN = os.environ.get("API_TOKEN", "")
@@ -28,7 +31,7 @@ def resolve_lang(lang: str) -> str:
     return "en-us"
 
 def cache_key(ra, dec, fov, theme, lang) -> str:
-    raw = f"{ra:.2f}_{dec:.2f}_{fov:.1f}_{theme}_{lang}"
+    raw = f"v{API_VERSION}_{ra:.2f}_{dec:.2f}_{fov:.1f}_{theme}_{lang}"
     return hashlib.md5(raw.encode()).hexdigest()
 
 def get_cache_path(key: str) -> str:
