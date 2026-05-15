@@ -13,15 +13,13 @@ API_TOKEN = os.environ.get("API_TOKEN", "")
 SUPPORTED_LANGUAGES = ["en-us", "es", "fa", "fr", "lt", "zh-cn", "zh-tw"]
 
 def resolve_lang(lang: str) -> str:
-    mapping = {
-        "en": "en-us",
-        "fr": "fr",
-        "es": "es",
-        "zh": "zh-cn",
-        "lt": "lt",
-        "fa": "fa",
-    }
-    return mapping.get(lang, "en-us")
+    if lang in SUPPORTED_LANGUAGES:
+        return lang
+    if lang == "en":
+        return "en-us"
+    if lang == "zh":
+        return "zh-cn"
+    return "en-us"
 
 def check_token():
     token = request.args.get("token") or request.headers.get("X-API-Token")
