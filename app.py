@@ -1,0 +1,97 @@
+from io import BytesIO
+
+import matplotlib
+import matplotlib.pyplot as plt
+from flask import Flask, request, send_file, abort
+from starplot import MapPlot, Mercator, settings, _
+from starplot.styles import PlotStyle, extensions
+import os
+matplotlib.use("Agg")
+
+API_TOKEN = os.environ.get("API_TOKEN", "")
+
+SUPPORTED_LANGUAGES = ["en-us", "es", "fa", "fr", "lt", "zh-cn", "zh-tw"]
+
+def resolve_lang(lang: str) -> str:
+    mapping = {
+        "en": "en-us",
+        "fr": "fr",
+        "es": "es",
+        "zh": "zh-cn",
+        "lt": "lt",
+        "fa": "fa",
+    }
+    return mapping.get(lang, "en-us")
+
+app = Flask(__name__)
+
+def check_token():
+    token = request.args.get("token") or request.headers.get("X-API-Token")
+    if not token or token != API_TOKEN:
+        abort(401)
+
+@app.route("/star-chart")
+def star_chart():
+    check_token()
+    plt.close("all")
+
+    ra    = float(request.args.get("ra",  83.82))
+    dec   = float(request.args.get("dec", -5.39))
+    fov   = float(request.args.get("fov", 30.0))
+    theme = request.args.get("theme", "dark")
+    lang  = request.args.get("lang", "en")
+
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = "en"
+
+    settings.language = resolve_lang(lang)
+
+    ra_min  = ra - fov / 2
+    ra_max  = ra + fov / 2
+    dec_min = max(-90, dec - fov / 2)
+    dec_max = min(90,  dec + fov / 2)
+
+    style = PlotStyle().extend(
+        extensions.BLUE_DARK if theme == "dark" else extensions.BLUE_LIGHT,
+        extensions.MAP,
+    )
+
+    p = MapPlot(
+        projection=Mercator(),
+        ra_min=ra_min,
+        ra_max=ra_max,
+        dec_min=dec_min,
+        dec_max=dec_max,
+        style=style,
+        resolution=1800,
+        autoscale=True,
+    )
+
+    p.gridlines()
+    p.constellations()
+    p.constellation_borders()
+    p.stars(
+        where=[_.magnitude < 8],
+        where_labels=[_.magnitude < 4],
+        bayer_labels=True,
+    )
+    p.nebula(
+        where=[(_.magnitude < 9) | (_.magnitude.isnull())],
+        where_labels=[(_.magnitude < 9) | (_.magnitude.isnull())]
+    )
+    p.galaxies(
+        where=[(_.magnitude < 9) | (_.magnitude.isnull())],
+        where_labels=[(_.magnitude < 9) | (_.magnitude.isnull())]
+    )
+    p.open_clusters(where=[(_.magnitude < 9) | (_.magnitude.isnull())], where_labels=[False])
+    p.milky_way()
+    p.constellation_labels()
+
+    buf = BytesIO()
+    p.export(buf, format="png", padding=0.1)
+    buf.seek(0)
+
+    return send_file(buf, mimetype="image/png")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)
