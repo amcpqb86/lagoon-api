@@ -17,6 +17,6 @@ COPY . /app
 
 EXPOSE 5050
 
-CMD ["gunicorn", "-w", "1", "--threads", "2", "-b", "0.0.0.0:5050", "--timeout", "120", "--graceful-timeout", "30", "--keep-alive", "5", "--preload", "app:app"]
+CMD ["gunicorn", "-w", "1", "--threads", "1", "-b", "0.0.0.0:5050", "--timeout", "120", "--graceful-timeout", "30", "--keep-alive", "5", "--preload", "app:app"]
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/', timeout=3)"

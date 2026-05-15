@@ -99,10 +99,15 @@ def star_chart():
         where=[(_.magnitude < 9) | (_.magnitude.isnull())],
         where_labels=[(_.magnitude < 9) | (_.magnitude.isnull())]
     )
-    p.open_clusters(
-        where=[(_.magnitude < 9) | (_.magnitude.isnull())],
-        where_labels=[False]
-    )
+
+    try:
+        p.open_clusters(
+            where=[(_.magnitude < 9) | (_.magnitude.isnull())],
+            where_labels=[False]
+        )
+    except Exception as e:
+        print(f"⚠️ open_clusters ignoré: {e}")
+
     try:
         p.milky_way()
     except Exception as e:
