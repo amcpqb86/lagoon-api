@@ -4,13 +4,16 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 from flask import Flask, request, send_file, abort
-from starplot import MapPlot, Mercator, settings, _
 from starplot.styles import PlotStyle, extensions
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from starplot import MapPlot, ZenithPlot, Mercator, Observer, settings, _
 
 matplotlib.use("Agg")
 
 API_TOKEN = os.environ.get("API_TOKEN", "")
-CACHE_DIR = "/app/cache"
+CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 SUPPORTED_LANGUAGES = ["en-us", "es", "fa", "fr", "lt", "zh-cn", "zh-tw"]
@@ -121,6 +124,60 @@ def star_chart():
     with open(cache_path, "wb") as f:
         f.write(image_bytes)
     print(f"💾 Cache saved: {key}")
+
+    return send_file(BytesIO(image_bytes), mimetype="image/png")
+
+@app.route("/zenith")
+def zenith_chart():
+    check_token()
+    plt.close("all")
+
+    lat   = float(request.args.get("lat",  48.8566))
+    lon   = float(request.args.get("lon",  2.3522))
+    theme = request.args.get("theme", "dark")
+    lang  = request.args.get("lang", "en")
+    lang  = resolve_lang(lang)
+    settings.language = lang
+
+    # Heure actuelle en UTC
+    dt = datetime.now(tz=ZoneInfo("UTC"))
+
+    key        = cache_key(lat, lon, 0, theme, lang) + f"_{dt.strftime('%Y%m%d%H')}"
+    cache_path = get_cache_path(key)
+
+    if os.path.exists(cache_path):
+        print(f"✅ Cache hit zenith: {key}")
+        return send_file(cache_path, mimetype="image/png")
+
+    observer = Observer(
+        dt=dt,
+        lat=lat,
+        lon=lon,
+    )
+
+    style = PlotStyle().extend(
+        extensions.BLUE_DARK if theme == "dark" else extensions.BLUE_LIGHT,
+    )
+
+    p = ZenithPlot(
+        observer=observer,
+        style=style,
+        resolution=3600,
+        autoscale=True,
+    )
+
+    p.horizon()
+    p.constellations()
+    p.stars(where=[_.magnitude < 4.6], where_labels=[_.magnitude < 2.4])
+    p.constellation_labels()
+
+    buf = BytesIO()
+    p.export(buf, format="png", transparent=True, padding=0.1)
+    image_bytes = buf.getvalue()
+
+    with open(cache_path, "wb") as f:
+        f.write(image_bytes)
+    print(f"💾 Cache saved zenith: {key}")
 
     return send_file(BytesIO(image_bytes), mimetype="image/png")
 
