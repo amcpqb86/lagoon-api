@@ -86,7 +86,10 @@ def star_chart():
         where_labels=[(_.magnitude < 9) | (_.magnitude.isnull())]
     )
     p.open_clusters(where=[(_.magnitude < 9) | (_.magnitude.isnull())], where_labels=[False])
-    p.milky_way()
+    try:
+        p.milky_way()
+    except Exception as e:
+        print(f"⚠️ milky_way ignoré: {e}")
     p.constellation_labels()
 
     buf = BytesIO()
