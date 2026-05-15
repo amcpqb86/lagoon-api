@@ -1,5 +1,6 @@
 from io import BytesIO
-
+from functools import lru_cache
+import hashlib
 import matplotlib
 import matplotlib.pyplot as plt
 from flask import Flask, request, send_file, abort
@@ -20,6 +21,12 @@ def resolve_lang(lang: str) -> str:
     if lang == "zh":
         return "zh-cn"
     return "en-us"
+
+def cache_key(ra, dec, fov, theme, lang):
+    raw = f"{ra:.2f}_{dec:.2f}_{fov:.1f}_{theme}_{lang}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+cache = {}
 
 def check_token():
     token = request.args.get("token") or request.headers.get("X-API-Token")
@@ -58,6 +65,11 @@ def star_chart():
         extensions.MAP,
     )
 
+    key = cache_key(ra, dec, fov, theme, lang)
+    if key in cache:
+        print(f"✅ Cache hit: {key}")
+        return send_file(BytesIO(cache[key]), mimetype="image/png")
+
     p = MapPlot(
         projection=Mercator(),
         ra_min=ra_min,
@@ -65,7 +77,7 @@ def star_chart():
         dec_min=dec_min,
         dec_max=dec_max,
         style=style,
-        resolution=1800,
+        resolution=1200,
         autoscale=True,
     )
 
@@ -94,9 +106,10 @@ def star_chart():
 
     buf = BytesIO()
     p.export(buf, format="png", padding=0.1)
-    buf.seek(0)
+    image_bytes = buf.getvalue()
+    cache[key] = image_bytes
 
-    return send_file(buf, mimetype="image/png")
+    return send_file(BytesIO(image_bytes), mimetype="image/png")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)
