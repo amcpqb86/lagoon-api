@@ -1,15 +1,17 @@
 from io import BytesIO
-from functools import lru_cache
 import hashlib
+import os
 import matplotlib
 import matplotlib.pyplot as plt
 from flask import Flask, request, send_file, abort
 from starplot import MapPlot, Mercator, settings, _
 from starplot.styles import PlotStyle, extensions
-import os
+
 matplotlib.use("Agg")
 
 API_TOKEN = os.environ.get("API_TOKEN", "")
+CACHE_DIR = "/app/cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 SUPPORTED_LANGUAGES = ["en-us", "es", "fa", "fr", "lt", "zh-cn", "zh-tw"]
 
@@ -22,11 +24,12 @@ def resolve_lang(lang: str) -> str:
         return "zh-cn"
     return "en-us"
 
-def cache_key(ra, dec, fov, theme, lang):
+def cache_key(ra, dec, fov, theme, lang) -> str:
     raw = f"{ra:.2f}_{dec:.2f}_{fov:.1f}_{theme}_{lang}"
     return hashlib.md5(raw.encode()).hexdigest()
 
-cache = {}
+def get_cache_path(key: str) -> str:
+    return os.path.join(CACHE_DIR, f"{key}.png")
 
 def check_token():
     token = request.args.get("token") or request.headers.get("X-API-Token")
@@ -49,11 +52,15 @@ def star_chart():
     fov   = float(request.args.get("fov", 30.0))
     theme = request.args.get("theme", "dark")
     lang  = request.args.get("lang", "en")
+    lang  = resolve_lang(lang)
+    settings.language = lang
 
-    if lang not in SUPPORTED_LANGUAGES:
-        lang = "en"
+    key        = cache_key(ra, dec, fov, theme, lang)
+    cache_path = get_cache_path(key)
 
-    settings.language = resolve_lang(lang)
+    if os.path.exists(cache_path):
+        print(f"✅ Cache hit: {key}")
+        return send_file(cache_path, mimetype="image/png")
 
     ra_min  = ra - fov / 2
     ra_max  = ra + fov / 2
@@ -64,11 +71,6 @@ def star_chart():
         extensions.BLUE_DARK if theme == "dark" else extensions.BLUE_LIGHT,
         extensions.MAP,
     )
-
-    key = cache_key(ra, dec, fov, theme, lang)
-    if key in cache:
-        print(f"✅ Cache hit: {key}")
-        return send_file(BytesIO(cache[key]), mimetype="image/png")
 
     p = MapPlot(
         projection=Mercator(),
@@ -97,7 +99,10 @@ def star_chart():
         where=[(_.magnitude < 9) | (_.magnitude.isnull())],
         where_labels=[(_.magnitude < 9) | (_.magnitude.isnull())]
     )
-    p.open_clusters(where=[(_.magnitude < 9) | (_.magnitude.isnull())], where_labels=[False])
+    p.open_clusters(
+        where=[(_.magnitude < 9) | (_.magnitude.isnull())],
+        where_labels=[False]
+    )
     try:
         p.milky_way()
     except Exception as e:
@@ -107,7 +112,10 @@ def star_chart():
     buf = BytesIO()
     p.export(buf, format="png", padding=0.1)
     image_bytes = buf.getvalue()
-    cache[key] = image_bytes
+
+    with open(cache_path, "wb") as f:
+        f.write(image_bytes)
+    print(f"💾 Cache saved: {key}")
 
     return send_file(BytesIO(image_bytes), mimetype="image/png")
 
